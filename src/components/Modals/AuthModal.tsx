@@ -3,6 +3,8 @@ import { X, Heart, LogIn, UserPlus, User, Dog, Building, FileText, MapPin, Dolla
 import { useAuth } from '../../hooks/useAuth';
 import { NEIGHBORHOODS } from '../../types';
 import { addSitterToStorage } from '../../data/mockData';
+import { supabase } from '../../lib/supabaseClient';
+import OtpModal from './OtpModal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -12,19 +14,26 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { login } = useAuth();
-  const [step, setStep] = useState<'choice' | 'client' | 'sitter'>('choice');
+  const [step, setStep] = useState<'choice' | 'client' | 'sitter' | 'login'>('choice');
   const [sitterStep, setSitterStep] = useState(1);
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [formData, setFormData] = useState({
+
+    // both common
     name: '',
-    email: '',
+    email: '', 
     phone: '',
     userType: 'client' as 'client' | 'sitter',
+    password: '',
+    isVerified: false,
+    userId: "",
+
     // Client specific
-    dogName: '',
-    dogBreed: '',
-    dogAge: '',
-    dogInfo: '',
-    dogImage: null as File | null,
+    dogName: '', //! client
+    dogBreed: '', //! client
+    dogAge: '', //! client
+    dogInfo: '', //! client
+    dogImage: null as File | null, //! client
     // Sitter specific
     description: '',
     experience: '1-2 שנים',
@@ -41,12 +50,43 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     agreeToTerms: false
   });
 
+  console.log({formData})
+
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
+  const handleFileChange = async (field: string, file: File | null) => {
+    if (!file) return;
+  
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`; // 👈 change folder name if needed
+  
+      // Upload to Supabase Storage
+      const { error } = await supabase.storage
+        .from("images") // 👈 replace with your bucket name
+        .upload(filePath, file);
+  
+      if (error) throw error;
+  
+      // Get public URL
+      const { data } = supabase.storage.from("images").getPublicUrl(filePath);
+  
+      const url = data.publicUrl;
+  
+      // Update formData with the uploaded image URL
+      setFormData((prev) => ({ ...prev, [field]: url }));
+    } catch (err: any) {
+      console.error("File upload error:", err.message);
+    }
+  };
+  
+
+  const handleSubmit = async () => {
+    console.log("i am consoled 1")
     const userData = {
-      id: Date.now().toString(),
-      name: formData.name,
+        id: Date.now().toString(),
+        name: formData.name,
       email: formData.email,
       phone: formData.phone,
       userType: formData.userType,
@@ -56,7 +96,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
       dogBreed: formData.dogBreed,
       dogAge: parseInt(formData.dogAge) || 0,
       dogInfo: formData.dogInfo,
-      dogImage: formData.dogImage ? URL.createObjectURL(formData.dogImage) : undefined,
+      dogImage: formData.dogImage || undefined,
       // Sitter specific data
       description: formData.description,
       experience: formData.experience,
@@ -67,14 +107,32 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
       accountNumber: formData.accountNumber,
       bankName: formData.bankName
     };
+    console.log("i am consoled 2")
 
-    // If registering as sitter, add to sitters list
-    if (formData.userType === 'sitter') {
+    // console.log({userData})
+    if(formData.userType === 'client'){
+        const { data, error } = await supabase.auth.signUp({
+                          email: formData.email,
+                          password: formData.password || crypto.randomUUID(),
+                          options: { data: {
+                            name: userData.name,
+                            phone: userData.phone,
+                            email: userData.email,
+                            user_type: userData.userType,
+                          } },
+                        });
+
+                        console.log({ data, error });
+                        if(error) return;
+    setIsOtpModalOpen(true)
+
+    } else if (formData.userType === 'sitter') {
       const sitterData = {
         id: userData.id,
         name: userData.name,
         email: userData.email,
         phone: userData.phone,
+        password: formData.password,
         profileImage: undefined,
         userType: 'sitter' as const,
         neighborhood: formData.allNeighborhoods ? 'כל השכונות' : (formData.neighborhoods[0] || 'תל אביב'),
@@ -113,27 +171,44 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
           };
         })
       };
+
+       const { data, error } = await supabase.auth.signUp({
+                          email: formData.email,
+                          password: formData.password || crypto.randomUUID(),
+                        //   options: { data: formData },
+                          options: { data: sitterData },
+                        });
+ console.log({ data, error });
+        if(error) return;
+        
+    setIsOtpModalOpen(true)
       
-      addSitterToStorage(sitterData);
-    }
-
-    login(userData);
-
-    setTimeout(() => {
-      if (formData.userType === 'client') {
-        // Client should see sitters tab
-        const event = new CustomEvent('setActiveTab', { detail: 'sitters' });
-        window.dispatchEvent(event);
-      } else if (formData.userType === 'sitter') {
-        // Sitter should see requests tab
-        const event = new CustomEvent('setActiveTab', { detail: 'requests' });
-        window.dispatchEvent(event);
-      }
-    }, 100);
-    
+    //   addSitterToStorage(sitterData);
+    } else{
+    await login(formData.email, formData.password);
     onSuccess?.();
     onClose();
     resetForm();
+    }
+
+
+    // login(userData);
+
+    // setTimeout(() => {
+    //   if (formData.userType === 'client') {
+    //     // Client should see sitters tab
+    //     const event = new CustomEvent('setActiveTab', { detail: 'sitters' });
+    //     window.dispatchEvent(event);
+    //   } else if (formData.userType === 'sitter') {
+    //     // Sitter should see requests tab
+    //     const event = new CustomEvent('setActiveTab', { detail: 'requests' });
+    //     window.dispatchEvent(event);
+    //   }
+    // }, 100);
+    
+    onSuccess?.();
+    // onClose();
+    // resetForm();
   };
 
   const resetForm = () => {
@@ -144,6 +219,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
       email: '',
       phone: '',
       userType: 'client',
+        password: '',
+        isVerified: false,
+        userId: "",
+
       dogName: '',
       dogBreed: '',
       dogAge: '',
@@ -164,6 +243,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     });
   };
 
+  const handleVerificationSuccess = (data) => {
+    console.log({data})
+    setFormData(prev => ({ ...prev, isVerified: true }));
+  }
+
   const canSubmitClient = () => {
     return formData.name.trim() && 
            formData.email.trim() && 
@@ -172,6 +256,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
            formData.dogBreed.trim() &&
            formData.dogAge.trim() &&
            formData.dogImage;
+  };
+
+  const canSubmitLogin = () => {
+    return formData.email.trim() && formData.password.trim();
   };
 
   const canSubmitSitter = () => {
@@ -209,6 +297,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
           onClick={() => {
             // כאן יהיה לוגיקת התחברות
             console.log('Login clicked');
+            setStep('login');
           }}
           className="w-full p-4 sm:p-6 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:shadow-md transition-all duration-300 group"
         >
@@ -281,6 +370,65 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     </div>
   );
 
+  const renderLoginForm = () => (
+    <div className="p-6 sm:p-8 bg-gradient-to-br from-orange-50 to-pink-50">
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-green-400 to-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg">
+          <Dog className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-transparent">
+          הרשמה כבעל כלב
+        </h2>
+      </div>
+      
+      <div className="space-y-4 sm:space-y-6">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">אימייל *</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white/80 backdrop-blur-sm border-2 border-orange-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all shadow-sm text-sm sm:text-base mobile-form"
+            placeholder="your@email.com"
+            required
+          />
+        </div>
+
+         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            סיסמה
+          </label>
+          <input
+            type="password"
+            value={formData.password}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, password: e.target.value }))
+            }
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white/80 backdrop-blur-sm border-2 border-orange-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all shadow-sm text-sm sm:text-base mobile-form"
+            placeholder="••••••••"
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmitLogin()}
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 sm:py-4 rounded-lg sm:rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm sm:text-base mobile-button"
+        >
+          הירשם
+        </button>
+      </div>
+
+      <div className="mt-6 sm:mt-8 text-center">
+        <button
+          onClick={() => setStep('choice')}
+          className="text-orange-600 hover:text-orange-700 font-medium transition-colors text-sm sm:text-base"
+        >
+          חזור לתפריט הראשי
+        </button>
+      </div>
+    </div>
+  );
+
   const renderClientForm = () => (
     <div className="p-6 sm:p-8 bg-gradient-to-br from-orange-50 to-pink-50">
       <div className="text-center mb-6 sm:mb-8">
@@ -316,6 +464,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
             required
           />
         </div>
+
+         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            סיסמה
+          </label>
+          <input
+            type="password"
+            value={formData.password}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, password: e.target.value }))
+            }
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white/80 backdrop-blur-sm border-2 border-orange-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all shadow-sm text-sm sm:text-base mobile-form"
+            placeholder="••••••••"
+          />
+        </div>
+
         
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">טלפון *</label>
@@ -373,7 +537,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
           <input
             type="file"
             accept="image/jpeg,image/png,image/jpg"
-            onChange={(e) => setFormData(prev => ({ ...prev, dogImage: e.target.files?.[0] || null }))}
+            onChange={(e) => handleFileChange('dogImage', e.target.files?.[0] || null)}
             className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white/80 backdrop-blur-sm border-2 border-orange-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all shadow-sm text-sm sm:text-base mobile-form"
             required
           />
@@ -515,6 +679,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                 <p className="text-red-500 text-xs mt-1">כתובת אימייל לא תקינה</p>
               )}
             </div>
+            
+         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            סיסמה
+          </label>
+          <input
+            type="password"
+            value={formData.password}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, password: e.target.value }))
+            }
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white/80 backdrop-blur-sm border-2 border-orange-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all shadow-sm text-sm sm:text-base mobile-form"
+            placeholder="••••••••"
+          />
+        </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">טלפון *</label>
               <input
@@ -954,7 +1133,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
         {step === 'choice' && renderChoice()}
         {step === 'client' && renderClientForm()}
         {step === 'sitter' && renderSitterForm()}
+        {step === 'login' && renderLoginForm()}
       </div>
+
+      <OtpModal isOpen={isOtpModalOpen} onClose={() => setIsOtpModalOpen(false)} email={formData.email} onVerificationSuccess={handleVerificationSuccess} />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 interface AuthContextType {
   user: User | null;
@@ -50,11 +51,19 @@ export const useAuthState = () => {
     }
   }, []);
 
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('userType', userData.userType);
-    setUserTypeState(userData.userType);
+  const login = async (email, password) => {
+      const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    console.log({data})
+    if (error) throw error;
+
+    setUser(data?.user);
+    localStorage.setItem('user', JSON.stringify(data?.user));
+    localStorage.setItem('userType', data?.user?.user_type);
+    setUserTypeState(data?.user?.user_type);
   };
 
   const updateUser = (updatedData: Partial<User>) => {
