@@ -18,23 +18,19 @@ export async function registerClientProfile({
   phone,
   neighborhood,
 }: {
-  name: string;
-  email: string;
-  phone: string;
-  neighborhood: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  neighborhood?: string;
 }) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  await supabase.from("profiles").upsert({
-    id: user.id,
-    name,
-    email,
+  await supabase.from("profiles").update({
     phone,
-    user_type: "client",
-    neighborhood,
-  });
+  })
+  .eq("id", user.id);
 
 //   const {data: userData, error: userError} = await supabase.from("profiles").select("id").eq("id", user.id).single();
 //   if (userError) throw userError;
@@ -54,7 +50,13 @@ export async function addClientDog(input: {
   image?: string;
   additional_info?: string;
 }) {
-  const { error } = await supabase.from("dogs").insert({
+    // const {
+    //     data: { user },
+    // } = await supabase.auth.getUser();
+    // if (!user) throw new Error("Not authenticated");
+    // console.log({input, user});
+
+  const { data, error } = await supabase.from("dogs").upsert({
     client_id: input.client_id,
     name: input.name,
     breed: input.breed,
@@ -63,19 +65,18 @@ export async function addClientDog(input: {
     image: input.image,
     additional_info: input.additional_info,
   });
+
+  console.log({data, error});
   if (error) throw error;
 }
 
 export async function registerSitterProfile(input: {
-  fullName: string;
-  email: string;
-  phone: string;
+  name?: string;
+  email?: string;
+  phone?: string;
   description?: string;
-  neighborhoods: string[];
-  services: Array<{
-    service_type: "walk_30" | "walk_60" | "home_visit";
-    price_cents: number;
-  }>;
+  neighborhoods?: string[];
+  services?: string[];
 }) {
   const {
     data: { user },
@@ -83,10 +84,10 @@ export async function registerSitterProfile(input: {
   if (!user) throw new Error("Not authenticated");
   await supabase.from("profiles").upsert({
     id: user.id,
-    name: input.fullName,
-    email: input.email,
+    // name: input.name,
+    // email: input.email,
     phone: input.phone,
-    user_type: "sitter",
+    // user_type: "sitter",
   });
   await supabase.from("sitters").upsert({
     profile_id: user.id,

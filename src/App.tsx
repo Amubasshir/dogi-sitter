@@ -866,6 +866,7 @@ function App() {
           isOpen={showAuthModal}
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => setShowAuthModal(false)}
+          setActiveTab={setActiveTab}
         />
 
         <BusinessAuthModal
