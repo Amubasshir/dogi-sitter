@@ -13,7 +13,7 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { login } = useAuth();
+  const { login, setUser } = useAuth();
   const [step, setStep] = useState<'choice' | 'client' | 'sitter' | 'login'>('choice');
   const [sitterStep, setSitterStep] = useState(1);
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
@@ -124,6 +124,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
 
                         console.log({ data, error });
                         if(error) return;
+                        setUser(data.user)
     setIsOtpModalOpen(true)
 
     } else if (formData.userType === 'sitter') {
@@ -180,6 +181,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                         });
  console.log({ data, error });
         if(error) return;
+        setUser(data.user)
         
     setIsOtpModalOpen(true)
       
@@ -246,6 +248,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
   const handleVerificationSuccess = (data) => {
     console.log({data})
     setFormData(prev => ({ ...prev, isVerified: true }));
+     onClose();
+    resetForm();
   }
 
   const canSubmitClient = () => {
@@ -260,6 +264,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
 
   const canSubmitLogin = () => {
     return formData.email.trim() && formData.password.trim();
+
   };
 
   const canSubmitSitter = () => {

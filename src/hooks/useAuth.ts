@@ -88,6 +88,7 @@ export const useAuthState = () => {
 
   return {
     user,
+    setUser,
     isAuthenticated: !!user,
     userType,
     login,
