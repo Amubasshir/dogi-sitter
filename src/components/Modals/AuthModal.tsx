@@ -73,7 +73,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
     agreeToTerms: false,
   });
 
-  console.log({ formData, user });
+  console.log({ formData, user, step });
 
   if (!isOpen) return null;
 
@@ -132,7 +132,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
     console.log("i am consoled 2");
 
     // console.log({userData})
-    if (formData.userType === "client") {
+    if (step === "client") {
+        console.log("client console")
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password || crypto.randomUUID(),
@@ -153,63 +154,14 @@ const AuthModal: React.FC<AuthModalProps> = ({
         duration: 8000,
       });
       setIsOtpModalOpen(true);
-    } else if (formData.userType === "sitter") {
-      const sitterData = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        password: formData.password,
-        profileImage: undefined,
-        userType: "sitter" as const,
-        neighborhood: formData.allNeighborhoods
-          ? "כל השכונות"
-          : formData.neighborhoods[0] || "תל אביב",
-        description: formData.description,
-        experience: formData.experience,
-        neighborhoods: formData.allNeighborhoods
-          ? ["כל השכונות בעיר"]
-          : formData.neighborhoods,
-        // services: formData.services.map((service) => ({
-        //   id: service.id,
-        //   type: service.name,
-        //   price: service.price,
-        //   description: service.description,
-        // })),
-        // availability: formData.availability.map((slot) => {
-        //   const [day, timeRange] = slot.split(":");
-        //   const [startTime, endTime] = timeRange.split("-");
-        //   return { day, startTime, endTime };
-        // }),
-        rating: 5.0,
-        reviewCount: 0,
-        verified: false,
-        services: formData.services.map((service, index) => ({
-          id: service.id || `service-${index}`,
-          type: service.name,
-          price: parseInt(service.price) || 0,
-          description: service.description || "",
-        })),
-        availability: formData.availability.map((slot) => {
-          const parts = slot.split(":");
-          const day = parts[0] || "ראשון";
-          const startTime =
-            parts.length >= 3 ? `${parts[1]}:${parts[2]}` : "09:00";
-          const endTime =
-            parts.length >= 4 ? `${parts[3]}:${parts[4] || "00"}` : "18:00";
-          return {
-            day,
-            startTime,
-            endTime,
-          };
-        }),
-      };
+    } else if (step === "sitter") {
+   
 
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password || crypto.randomUUID(),
         //   options: { data: formData },
-        options: { data: sitterData },
+        options: { data: formData },
       });
       console.log({ data, error });
       if (error) return;
@@ -223,15 +175,17 @@ const AuthModal: React.FC<AuthModalProps> = ({
     } else {
       login(formData.email, formData.password);
 
-           if (formData.userType === 'client') {
-        // Client should see sitters tab
-        const event = new CustomEvent('setActiveTab', { detail: 'sitters' });
-        window.dispatchEvent(event);
-      } else if (formData.userType === 'sitter') {
-        // Sitter should see requests tab
-        const event = new CustomEvent('setActiveTab', { detail: 'requests' });
-        window.dispatchEvent(event);
-      }
+    console.log("login consoled")
+
+    //        if (formData.userType === 'client') {
+    //     // Client should see sitters tab
+    //     const event = new CustomEvent('setActiveTab', { detail: 'sitters' });
+    //     window.dispatchEvent(event);
+    //   } else if (formData.userType === 'sitter') {
+    //     // Sitter should see requests tab
+    //     const event = new CustomEvent('setActiveTab', { detail: 'requests' });
+    //     window.dispatchEvent(event);
+    //   }
       onSuccess?.();
       onClose();
       resetForm();
@@ -289,8 +243,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleVerificationSuccess = async (data) => {
     console.log("from auth verify", { data });
+    onClose?.();
+    resetForm();
     // setFormData((prev) => ({ ...prev, isVerified: true }));
-    // onClose();
     // resetForm();
                     if(formData.userType === 'client'){
                         const clientData = await registerClientProfile({
@@ -299,16 +254,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
                         if (!clientData) return;
     
                         setTimeout(async () => {
-                            console.log({
-                                //   client_id: data.user!.id,
-                                client_id: data?.user.id,
-                                name: formData.dogName,
-                                breed: formData.dogBreed,
-                                age: Number(formData.dogAge),
-                                size: "large",
-                                image: formData.dogImage,
-                                additional_info: formData.dogInfo,
-                        })
                             await addClientDog({
                                 //   client_id: data.user!.id,
                                 client_id: data?.user.id,
@@ -331,17 +276,27 @@ const AuthModal: React.FC<AuthModalProps> = ({
                     }, 1000);
 
                     }else if(formData.userType === 'sitter'){
+                         
                             await registerSitterProfile({
                             id: data?.user?.id,
+                            description: formData.description,
+                            experience: formData.experience,
+                            neighborhoods: formData.neighborhoods,
+                            availability: formData.availability,
+                            agree_to_terms: formData.agreeToTerms,
                             phone: formData.phone,
+                            all_neighborhoods: formData.allNeighborhoods,
+                            services: formData.services,
                             });
 
-const event = new CustomEvent('setActiveTab', { detail: 'sitter' });
-        window.dispatchEvent(event);
+                            
+
+
+                            const event = new CustomEvent('setActiveTab', { detail: 'requests' });
+                            window.dispatchEvent(event);
                             onSuccess?.();
                             onClose();
                             resetForm();
-                        
                     }
 
                     
@@ -1464,7 +1419,10 @@ const event = new CustomEvent('setActiveTab', { detail: 'sitter' });
             {step === "sitter" && "הרשמה כסיטר"}
           </h1>
           <button
-            onClick={onClose}
+            onClick={() => {
+                onClose?.();
+                resetForm();
+            }}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <X className="w-5 h-5 text-gray-500" />

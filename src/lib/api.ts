@@ -70,38 +70,31 @@ export async function addClientDog(input: {
   if (error) throw error;
 }
 
-export async function registerSitterProfile(input: {
-  name?: string;
-  email?: string;
-  phone?: string;
-  description?: string;
-  neighborhoods?: string[];
-  services?: string[];
-}) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  await supabase.from("profiles").upsert({
-    id: user.id,
-    // name: input.name,
-    // email: input.email,
+export async function registerSitterProfile(input) {
+ 
+  await supabase.from("profiles").update({
     phone: input.phone,
-    // user_type: "sitter",
-  });
+    user_type: 'sitter'
+  }).eq('id', input.id);
+
   await supabase.from("sitters").upsert({
-    profile_id: user.id,
+    profile_id: input.id,
     description: input.description,
+    experience: input.experience,
     neighborhoods: input.neighborhoods,
+    availability: input.availability,
+    agree_to_terms: input.agree_to_terms,
+    all_neighborhoods: input.allNeighborhoods,
+    services: input.services,
   });
   // Upsert services
-  for (const s of input.services) {
-    await supabase.from("sitter_services").upsert({
-      sitter_id: user.id,
-      service_type: s.service_type,
-      price_cents: s.price_cents,
-    });
-  }
+//   for (const s of input?.services) {
+//     await supabase.from("sitter_services").upsert({
+//       sitter_id: user.id,
+//       service_type: s.service_type,
+//       price_cents: s.price_cents,
+//     });
+//   }
 }
 
 export async function createRequest(input: {
