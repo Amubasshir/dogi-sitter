@@ -7,6 +7,8 @@ export interface User {
   userType: 'client' | 'sitter';
   neighborhood: string;
   createdAt: Date;
+  description?: string;
+  sitterData?: any;
 }
 
 export interface Client extends User {

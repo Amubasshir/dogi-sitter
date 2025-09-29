@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { X, User, Dog, Edit, Save, Camera, MapPin, Phone, Mail, Star, Shield, Clock, Plus, Trash2, FileText, MessageCircle, HelpCircle, LogOut, CreditCard, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { NEIGHBORHOODS } from '../../types';
+import { supabase } from '../../lib/supabaseClient';
+import { addClientDog, registerSitterProfile } from '../../lib/api';
+import toast from 'react-hot-toast';
 
 const ProfileScreen: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
@@ -30,6 +33,8 @@ const ProfileScreen: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   }));
+
+  console.log({activeTab})
   
   // Update editData when user data changes
   React.useEffect(() => {
@@ -44,12 +49,12 @@ const ProfileScreen: React.FC = () => {
       dogInfo: user?.dogInfo || '',
       dogImage: user?.dogImage || '',
       // Sitter specific
-      description: user?.description || '',
-      experience: user?.experience || '1-2 שנים',
-      neighborhoods: user?.neighborhoods || [],
+      description: user?.sitter?.description || '',
+      experience: user?.sitter?.experience || '1-2 שנים',
+      neighborhoods: user?.sitter?.neighborhoods || [],
       allNeighborhoods: false,
-      services: user?.services || [{ id: '1', name: '', price: 0, description: '' }],
-      availability: user?.availability || [],
+      services: user?.sitter?.services || [{ id: '1', name: '', price: 0, description: '' }],
+      availability: user?.sitter?.availability || [],
       // Security
       currentPassword: '',
       newPassword: '',
@@ -82,6 +87,8 @@ const ProfileScreen: React.FC = () => {
       localStorage.setItem(`bankAccounts_${user?.id}`, JSON.stringify(initialAccounts));
       return initialAccounts;
     }
+
+    console.log({editData, user})
     
     // Otherwise start with empty editable account
     const defaultAccounts = [{
@@ -96,6 +103,36 @@ const ProfileScreen: React.FC = () => {
     return defaultAccounts;
   });
   const [editingBankId, setEditingBankId] = useState<string | null>(null);
+
+   const handleFileChange = async (field: string, file: File | null) => {
+      if (!file) return;
+  
+      try {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `uploads/${fileName}`; // 👈 change folder name if needed
+  
+        // Upload to Supabase Storage
+        const { error } = await supabase.storage
+          .from("images") // 👈 replace with your bucket name
+          .upload(filePath, file);
+  
+        if (error) throw error;
+  
+        // Get public URL
+        const { data } = supabase.storage.from("images").getPublicUrl(filePath);
+  
+        const url = data.publicUrl;
+
+        console.log({url})
+  
+        // Update formData with the uploaded image URL
+        setEditData((prev) => ({ ...prev, [field]: url }));
+      } catch (err: any) {
+        console.error("File upload error:", err.message);
+      }
+    };
+  
 
   // Save bank accounts to localStorage whenever they change
   React.useEffect(() => {
@@ -115,7 +152,53 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
-  const handleSave = () => {
+
+  const handleChangePassword = async () => {
+      try {
+          // Validate that new passwords match
+          if (editData.newPassword !== editData.confirmPassword) {
+              toast.error("New passwords don't match");
+              return;
+            }
+
+
+            // Optional: Verify current password first
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email, // Get from current session
+        password: editData.currentPassword
+        });
+
+        if (signInError) {
+        toast.error('Current password is incorrect');
+        return;
+    }
+    
+    // console.log({data})
+    
+    // Update password using Supabase
+    const { data, error } = await supabase.auth.updateUser({
+        password: editData.newPassword
+    })
+
+    console.log({data})
+    
+        if (error) {
+        toast.error('Password changing failed!');
+        return;
+        }
+
+        toast('Password updated successfully!');
+        return { success: true };
+        
+  } catch (error) {
+    toast.error('Error updating password:', error.message);
+    return { success: false, error: error.message };
+  }
+  }
+
+
+  const handleSave = async () => {
+
     // Update user data in context and localStorage
     const updatedData = {
       phone: editData.phone,
@@ -133,10 +216,22 @@ const ProfileScreen: React.FC = () => {
     };
     
     // Update user in context (this will also update localStorage)
-    updateUser(updatedData);
+    // updateUser(updatedData);
+
+    if(user?.userType === 'client' && activeTab === 'profile') {
+        addClientDog({
+            name: editData.dogName,
+            breed: editData.dogBreed,
+            age: editData.dogAge,
+            size: 'medium',
+            image: editData.dogImage,
+            additional_info: editData.dogInfo,
+            client_id: user.id,
+        })
+    }
     
     // Update sitters list if user is a sitter
-    if (user?.userType === 'sitter') {
+    if (user?.userType === 'sitter' && activeTab === 'profile') {
       const storedSitters = localStorage.getItem('registeredSitters');
       if (storedSitters) {
         try {
@@ -163,6 +258,18 @@ const ProfileScreen: React.FC = () => {
               })
             } : sitter
           );
+
+             await registerSitterProfile({
+                                      id: user?.id,
+                                      description: editData.description,
+                                      experience: editData.experience,
+                                      neighborhoods: editData.neighborhoods,
+                                      availability: editData.availability,
+                                      phone: editData.phone,
+                                      all_neighborhoods: editData.allNeighborhoods,
+                                      services: editData.services,
+                                      });
+          
           localStorage.setItem('registeredSitters', JSON.stringify(updatedSitters));
           
           // Trigger update event
@@ -343,7 +450,9 @@ const ProfileScreen: React.FC = () => {
             <input
               type="file"
               accept="image/jpeg,image/png,image/jpg"
-              onChange={(e) => setEditData(prev => ({ ...prev, dogImage: e.target.files?.[0] || null }))}
+              onChange={(e) =>
+              handleFileChange("dogImage", e.target.files?.[0] || null)
+            }
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
             <p className="text-xs text-orange-600 mt-2">
@@ -402,7 +511,6 @@ const ProfileScreen: React.FC = () => {
           </div>
         </div>
       </div>
-
       <div className="gradient-card rounded-xl shadow-soft border border-white/20 backdrop-blur-xl p-6">
         <h3 className="font-semibold text-lg text-gray-900 mb-4">תיאור ועיסוק</h3>
         
@@ -410,7 +518,7 @@ const ProfileScreen: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">תיאור אישי</label>
             <textarea
-              value={editData.description}
+              value={editData.description || user.description}
               onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
               rows={4}
               maxLength={200}
@@ -655,7 +763,7 @@ const ProfileScreen: React.FC = () => {
           </div>
 
           <button
-            onClick={() => console.log('Change password')}
+            onClick={handleChangePassword}
             className="w-full py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all font-semibold shadow-lg"
           >
             שמור שינויים

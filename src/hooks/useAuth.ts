@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User } from '../types';
 import { supabase } from '../lib/supabaseClient';
+import toast from 'react-hot-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -51,13 +52,30 @@ export const useAuthState = () => {
       return;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select(
         "id, name, email, phone, user_type, neighborhood, created_at, profile_image"
       )
       .eq("id", authUser.id)
       .single();
+      
+      if(error) return;
+
+
+    let sitterData = null;
+    if(profile?.user_type === 'sitter') {
+        const { data } = await supabase
+          .from("sitters")
+          .select("*")
+          .eq("profile_id", profile.id)
+          .single();
+
+          console.log({data})
+
+        sitterData = data;
+    }
+      
 
     if (profile) {
       const mapped: User = {
@@ -65,10 +83,12 @@ export const useAuthState = () => {
         name: profile.name || "",
         email: profile.email || "",
         phone: profile.phone || "",
+        description: profile.description || "",
         profileImage: profile.profile_image || undefined,
         userType: profile.user_type,
         neighborhood: profile.neighborhood || "",
         createdAt: new Date(profile.created_at),
+        sitter: sitterData,
       };
       setUser(mapped);
       setUserType(profile.user_type);
@@ -107,7 +127,10 @@ export const useAuthState = () => {
     });
 
     console.log({data})
-    if (error) throw error;
+    if (error) {
+        toast.error('Login failed! Incorrect password / email');
+        throw error;
+    }
 
     setUser(data?.user);
     localStorage.setItem('user', JSON.stringify(data?.user));

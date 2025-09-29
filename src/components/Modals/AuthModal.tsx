@@ -73,7 +73,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
     agreeToTerms: false,
   });
 
-  console.log({ formData, user, step });
+//   console.log({ formData, user, step });
 
   if (!isOpen) return null;
 
@@ -105,7 +105,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    console.log("i am consoled 1");
+    // console.log("i am consoled 1");
     const userData = {
       id: Date.now().toString(),
       name: formData.name,
@@ -129,11 +129,11 @@ const AuthModal: React.FC<AuthModalProps> = ({
       accountNumber: formData.accountNumber,
       bankName: formData.bankName,
     };
-    console.log("i am consoled 2");
+    // console.log("i am consoled 2");
 
     // console.log({userData})
     if (step === "client") {
-        console.log("client console")
+        // console.log("client console")
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password || crypto.randomUUID(),
@@ -147,7 +147,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
         },
       });
 
-      console.log({ data, error });
+    //   console.log({ data, error });
       if (error) return;
       toast("נשלח אימייל לאימות, אנא בדוק את תיבת הדואר הנכנס שלך", {
         icon: "📧",
@@ -163,7 +163,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
         //   options: { data: formData },
         options: { data: formData },
       });
-      console.log({ data, error });
+    //   console.log({ data, error });
       if (error) return;
       toast("נשלח אימייל לאימות, אנא בדוק את תיבת הדואר הנכנס שלך", {
         icon: "📧",
@@ -175,7 +175,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
     } else {
       login(formData.email, formData.password);
 
-    console.log("login consoled")
+    // console.log("login consoled")
 
     //        if (formData.userType === 'client') {
     //     // Client should see sitters tab

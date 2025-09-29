@@ -56,7 +56,8 @@ export async function addClientDog(input: {
     // if (!user) throw new Error("Not authenticated");
     // console.log({input, user});
 
-  const { data, error } = await supabase.from("dogs").upsert({
+//   const { data, error } = await supabase.from("dogs").upsert({
+  const { data, error } = await supabase.from("dogs").insert({
     client_id: input.client_id,
     name: input.name,
     breed: input.breed,
@@ -77,16 +78,23 @@ export async function registerSitterProfile(input) {
     user_type: 'sitter'
   }).eq('id', input.id);
 
-  await supabase.from("sitters").upsert({
+  const inputsData = {
     profile_id: input.id,
     description: input.description,
     experience: input.experience,
     neighborhoods: input.neighborhoods,
     availability: input.availability,
-    agree_to_terms: input.agree_to_terms,
     all_neighborhoods: input.allNeighborhoods,
     services: input.services,
-  });
+  };
+
+  console.log({inputsData})
+
+  if(input.agree_to_terms) {
+    inputsData.agree_to_terms = input.agree_to_terms;
+  }
+
+  await supabase.from("sitters").upsert(inputsData);
   // Upsert services
 //   for (const s of input?.services) {
 //     await supabase.from("sitter_services").upsert({
